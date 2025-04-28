@@ -759,7 +759,7 @@ def extract_relations_with_llm(entities, entity_type):
     # 构建向大模型的提示
     if entity_type == "resume":
         prompt = f"""
-        根据以下简历中提取的实体，构建关系三元组。
+        根据以下简历中提取的实体，构建关系三元组。 
         实体信息：{entities_str}
         
         请自动分析这些实体，发现适合的关系类型，并构建(主体, 关系, 客体)格式的三元组列表。
@@ -1858,6 +1858,12 @@ def main():
         print("\n系统自动发现的新实体类别:")
         for category in new_categories:
             print(f"- {category}: {entity_registry.category_descriptions.get(category, '无描述')} ({len(entity_registry.entities[category])}个实体)")
+            # 打印该类别中的前20个实体（或全部，如果少于20个）
+            entity_list = list(entity_registry.entities[category].keys())
+            display_entities = entity_list[:20]
+            if entity_list:
+                print(f"  实体列表: {', '.join(display_entities)}" + 
+                    (f" 等共{len(entity_list)}个" if len(entity_list) > 20 else ""))
     
     # 在程序结束前保存实体注册表到缓存
     cache_manager.save_entity_registry_to_cache(entity_registry)
