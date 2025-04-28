@@ -97,95 +97,151 @@
    - 错误处理机制：在数据加载和处理过程中的健壮性设计
    - 缓存与持久化机制：提高系统效率的设计
 
+我将为您添加安装与配置、使用方法和评估与指标部分的内容。
+
 ## 安装与配置
 
-论文中描述的招聘推荐系统有明确的安装与配置要求：
+论文中的招聘推荐系统需要以下环境和依赖项进行安装配置：
 
-1. **环境依赖**：
+1. **基础环境**：
 
-   - Python 环境（未明确指定版本，但应为 Python 3.x）
-   - 核心依赖库：pandas、numpy、re、json、networkx、requests、difflib、hashlib、pickle
-   - 需要有互联网连接以调用外部 API
+   - Python 3.8+
+   - pandas、numpy、networkx 等数据处理库
+   - requests 库用于 API 调用
 
 2. **API 配置**：
 
-   - 系统使用 gpt-4o-mini 模型进行实体和关系抽取
-   - 需要配置有效的 API 密钥
-   - API 端点设置为"https://api.gueai.com/v1/chat/completions"
+   - 系统依赖大语言模型 API，需要配置有效的 API 密钥
+   - 默认使用 gpt-4o-mini 模型，API 地址为"https://api.gueai.com/v1/chat/completions"
+   - API 密钥需要在代码中更新（在`call_gpt_api`函数中）
 
-3. **文件结构设置**：
+3. **目录结构**：
 
-   - 数据目录：./data（存放 table1_user.csv、table2_jd.csv、table3_action.csv）
-   - 缓存目录：./cache（自动创建 cache/resumes、cache/jobs、cache/entities 子目录）
-   - 缓存机制需要适当的文件读写权限
+   ```
+   project_root/
+   ├── data/              # 数据目录
+   │   ├── table1_user.csv
+   │   ├── table2_jd.csv
+   │   └── table3_action.csv
+   ├── cache/             # 缓存目录(自动创建)
+   │   ├── resumes/
+   │   ├── jobs/
+   │   └── entities/
+   └── index.py           # 主程序
+   ```
 
-4. **模型初始化**：
-   - 系统首次运行时会自动初始化实体注册表
-   - 将从数据集中预提取常见实体进行初始化
-   - 后续运行时可从缓存加载已有实体注册表
+4. **安装步骤**：
+
+   ```bash
+   # 克隆代码库
+   git clone [repository_url]
+   cd [project_directory]
+
+   # 安装依赖
+   pip install pandas numpy networkx requests
+
+   # 创建数据目录
+   mkdir -p data
+
+   # 准备数据文件
+   # 将table1_user.csv、table2_jd.csv、table3_action.csv放入data目录
+   ```
 
 ## 使用方法
 
-论文中描述的系统使用方法主要包括：
+论文中系统的使用方法包括：
 
-1. **数据准备**：
+1. **基本运行**：
 
-   - 准备用户数据（表格需包含 user_id 和 experience 等字段）
-   - 准备职位数据（表格需包含 jd_no 和 job_description 等字段）
-   - 准备行为数据（表格需记录 user_id 与 jd_no 的交互行为）
-   - 将数据文件放置于./data 目录下
+   ```bash
+   python index.py
+   ```
 
-2. **系统运行**：
+   这将执行完整的招聘推荐流程，包括数据加载、实体抽取、匹配计算和评估。
 
-   - 通过执行 main()函数启动系统
-   - 系统会自动加载数据、初始化实体注册表
-   - 系统会测试 API 连接是否可用
-   - 随机选取一部分用户进行测试（默认选择 30%的用户，但实际测试仅使用 3 个用户）
+2. **主要功能模块**：
 
-3. **输出解读**：
+   - 数据加载与预处理：自动从 data 目录加载三个 CSV 文件
+   - 实体抽取：从简历和职位描述中提取实体
+   - 关系构建：建立实体间的关系
+   - 匹配计算：为用户计算并排序职位匹配度
+   - 性能评估：计算 MAP 指标
 
-   - 系统会输出每个测试用户的职位排序结果
-   - 对于每个匹配的职位，显示总分、各维度分数、缺少技能和匹配优势
-   - 最终输出整体的 MAP 评估结果
-   - 显示实体清单的最终状态和自动发现的新实体类别
+3. **代码中的关键函数**：
 
-4. **高级使用**：
-   - 可调用 rank_jobs_for_user()函数为特定用户进行职位排序
-   - 可修改 evaluate_model()函数中的评估参数
-   - 可通过修改 cache_manager 的相关配置调整缓存行为
+   ```python
+   # 加载数据
+   user_df, jd_df, action_df = load_data()
+
+   # 为特定用户排序职位
+   ranked_jobs, job_details = rank_jobs_for_user(user_id, user_df, jd_df, action_df)
+
+   # 评估模型性能
+   map_delivered, map_satisfied, map_final, job_details = evaluate_model(user_df, jd_df, action_df, test_user_ids)
+   ```
+
+4. **输出结果**：
+
+   - 系统将在控制台输出详细的处理过程和结果
+   - 包括实体抽取、匹配计算和最终排序结果
+   - 最终性能评估指标（MAP 值）也会显示在控制台
+
+5. **缓存使用**：
+   - 系统自动创建 cache 目录存储中间结果
+   - 再次运行时会自动利用缓存加速处理
+   - 退出时会自动保存实体注册表
 
 ## 评估与指标
 
-论文中使用了以下评估方法和指标来衡量系统性能：
+论文中使用了以下评估方法和指标来衡量招聘推荐系统的性能：
 
-1. **主要评估指标**：
+1. **评估数据集划分**：
 
-   - MAP（Mean Average Precision）：评估推荐系统排序质量的标准指标
-   - MAP_delivered：针对用户实际投递行为计算的 MAP 值
-   - MAP_satisfied：针对用户中意行为计算的 MAP 值
-   - 最终评价值 = 0.7 _ MAP_satisfied + 0.3 _ MAP_delivered（赋予中意行为更高权重）
+   ```python
+   # 划分训练集和测试集
+   all_user_ids = user_df['user_id'].unique()
+   np.random.seed(42)  # 设置随机种子，确保结果可复现
+   test_ratio = 0.3
+   test_size = int(len(all_user_ids) * test_ratio)
 
-2. **计算方法**：
+   # 为了测试效率，这里只使用少量数据
+   test_user_ids = np.random.choice(all_user_ids, min(test_size, 3), replace=False)
+   ```
 
-   - 对每个用户计算 Average Precision (AP)
-   - AP 计算考虑了推荐列表中正例（用户实际投递或中意的职位）的位置
-   - 最终 MAP 为所有用户 AP 值的平均值
+2. **主要评估指标 - MAP (Mean Average Precision)**：
 
-3. **匹配度分解指标**：
+   - 对每个用户，计算其职位推荐结果的 Average Precision (AP)
+   - MAP 是所有用户 AP 值的平均
+   - 计算公式在代码中的`calculate_MAP`函数中实现
+   - 对于每个用户，计算公式为：
+     ```
+     AP = (Σ P(k) × rel(k)) / (相关职位总数)
+     ```
+     其中 P(k)是截至第 k 个结果的精确率，rel(k)表示第 k 个结果是否相关
 
-   - 维度覆盖度（dimension_coverage）：评估简历与职位在能力维度上的覆盖程度
-   - 实体匹配度（entity_matching）：评估简历与职位在具体实体上的匹配程度
-   - 关系匹配度（relation_matching）：评估简历与职位在关系三元组上的匹配程度
-   - 综合匹配度 = 0.3 _ 维度覆盖度 + 0.5 _ 实体匹配度 + 0.2 \* 关系匹配度（赋予实体匹配最高权重）
+3. **双重行为评估**：
 
-4. **质性评估指标**：
+   - `map_delivered`：评估系统推荐与用户实际投递行为的匹配程度
+   - `map_satisfied`：评估系统推荐与用户中意职位的匹配程度
+   - 最终评价值：综合考虑两种行为的加权平均
+     ```
+     map_final = map_satisfied * 0.7 + map_delivered * 0.3
+     ```
 
-   - 缺少技能（missing_skills）：识别候选人简历中缺少的关键技能
-   - 匹配优势（strengths）：识别候选人相对于职位要求的优势领域
-   - 这些质性指标有助于解释推荐结果，提供更有意义的人岗匹配分析
+4. **详细匹配度评估**：
 
-5. **测试方法**：
-   - 随机抽样：从所有用户中随机选择测试用户
-   - 固定随机种子（42）以确保结果可复现
-   - 分别针对"投递"和"中意"两种行为进行评估
-   - 对每个测试用户输出详细的匹配分析结果
+   - 维度覆盖度（dimension_coverage）：衡量简历与职位在维度层面的匹配程度
+   - 实体匹配度（entity_matching）：衡量简历与职位在具体实体层面的匹配程度
+   - 关系匹配度（relation_matching）：衡量简历与职位在关系三元组层面的匹配程度
+   - 综合匹配度：采用加权平均计算
+     ```python
+     weights = [0.3, 0.5, 0.2]  # 维度覆盖度、实体匹配度、关系匹配度的权重
+     overall_matching = weights[0] * dimension_coverage + weights[1] * entity_matching + weights[2] * relation_matching
+     ```
+
+5. **质性评估**：
+   - 识别缺失技能（missing_skills）：推荐系统能够识别求职者简历中缺少的关键技能
+   - 识别个人优势（strengths）：能够识别求职者与特定职位匹配的优势
+   - 这些质性信息同样在 job_details 中返回，可作为推荐系统的解释性组件
+
+本招聘推荐系统采用了全面的评估体系，不仅关注推荐结果的准确性（通过 MAP 指标），还考察了推荐的解释性（通过缺失技能和个人优势的识别）。多维度的匹配度评估方法也使系统能够对不同方面的匹配情况进行细粒度分析。
