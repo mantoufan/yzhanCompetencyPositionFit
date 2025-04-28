@@ -104,20 +104,20 @@ class EntityRegistry:
     def __init__(self):
         # 初始基本类别
         self.entities = {
-            "skills": {},           # 技能类实体
-            "experience": {},       # 经验类实体
-            "education": {},        # 教育类实体
-            "industry": {},         # 行业类实体
-            "requirements": {},     # 职位要求类实体
-            "responsibilities": {}  # 职责类实体
+            "技能": {},              # 原skills
+            "工作经验": {},          # 原experience
+            "教育背景": {},          # 原education
+            "行业领域": {},          # 原industry
+            "职位要求": {},          # 原requirements
+            "工作职责": {}           # 原responsibilities
         }
         self.category_descriptions = {
-            "skills": "专业技能、技术能力、工具使用等",
-            "experience": "工作经历、项目经验等",
-            "education": "学历、专业背景、培训经历等",
-            "industry": "行业领域、专业方向等",
-            "requirements": "职位要求、招聘条件等",
-            "responsibilities": "工作职责、岗位任务等"
+            "技能": "专业技能、技术能力、工具使用等",
+            "工作经验": "工作经历、项目经验等",
+            "教育背景": "学历、专业背景、培训经历等",
+            "行业领域": "行业领域、专业方向等",
+            "职位要求": "职位要求、招聘条件等",
+            "工作职责": "工作职责、岗位任务等"
         }
         self.canonical_forms = {}   # 规范形式的映射表
     
@@ -128,16 +128,29 @@ class EntityRegistry:
             for existing_category in self.entities.keys():
                 if SequenceMatcher(None, category_name.lower(), existing_category.lower()).ratio() > 0.8:
                     print(f"新类别 '{category_name}' 与已有类别 '{existing_category}' 相似，使用已有类别")
-                    return False
+                    return existing_category
             
+            # 验证新类别名称的有效性（名称不应太长，不应包含特殊字符等）
+            if len(category_name) > 20 or any(char in category_name for char in "!@#$%^&*()+=[]{}|\\;:'\",.<>/?"):
+                print(f"忽略无效的类别名称: {category_name}")
+                return None
+                
             self.entities[category_name] = {}
             self.category_descriptions[category_name] = category_description
             print(f"新增实体类别: {category_name} - {category_description}")
-            return True
-        return False
+            return category_name
+        return None
     
-    def add_entity(self, category, entity_name):
+    def add_entity(self, category, entity_name, min_entity_length=2, max_entity_length=50):
         """添加实体到清单中，如有相似实体则返回规范形式"""
+         # 验证实体名称的有效性
+        if not isinstance(entity_name, str):
+            return None
+        
+        # 检查实体长度
+        if len(entity_name) < min_entity_length or len(entity_name) > max_entity_length:
+            return None
+            
         # 如果实体已经有规范形式，直接返回
         if entity_name in self.canonical_forms:
             return self.canonical_forms[entity_name]
@@ -170,7 +183,9 @@ class EntityRegistry:
         """规范化实体列表"""
         normalized = []
         for entity in entity_list:
-            normalized.append(self.add_entity(category, entity))
+            normalized_entity = self.add_entity(category, entity)
+            if normalized_entity:  # 只添加有效的实体
+                normalized.append(normalized_entity)
         return normalized
 
     def get_all_entities(self, category=None):
@@ -186,6 +201,24 @@ class EntityRegistry:
     def get_all_categories(self):
         """获取所有实体类别及其描述"""
         return {cat: desc for cat, desc in self.category_descriptions.items()}
+    
+    def clean_empty_categories(self, min_entities=1):
+        """清理没有足够实体的类别，保留核心类别"""
+        # 核心类别，不会被删除
+        core_categories = {"技能", "工作经验", "教育背景", "行业领域", "职位要求", "工作职责"}
+        
+        categories_to_remove = []
+        for category, entities in self.entities.items():
+            if category not in core_categories and len(entities) < min_entities:
+                categories_to_remove.append(category)
+        
+        for category in categories_to_remove:
+            del self.entities[category]
+            if category in self.category_descriptions:
+                del self.category_descriptions[category]
+            print(f"清理空类别: {category}")
+        
+        return len(categories_to_remove)
 
 # 初始化全局实体清单
 entity_registry = EntityRegistry()
@@ -469,7 +502,7 @@ def preprocess_text(text):
 
 def initialize_entity_registry(user_df, jd_df):
     """初始化实体清单，从数据中预先提取常见实体"""
-    # 从用户简历中提取关键词
+   # 从用户简历中提取关键词
     for _, user in user_df.head(10).iterrows():  # 只处理前10条用户数据用于初始化
         if 'experience' in user:
             experience_text = str(user['experience'])
@@ -479,13 +512,13 @@ def initialize_entity_registry(user_df, jd_df):
                 for word in words:
                     if len(word) > 1:
                         if len(word) <= 10:  # 只添加合理长度的实体
-                            entity_registry.add_entity("skills", word)
+                            entity_registry.add_entity("技能", word)
                         elif len(word) > 10 and "|" in word:
                             # 处理可能的多个实体
                             sub_words = word.split("|")
                             for sub_word in sub_words:
                                 if len(sub_word) > 1 and len(sub_word) <= 10:
-                                    entity_registry.add_entity("skills", sub_word)
+                                    entity_registry.add_entity("技能", sub_word)
     
     # 从职位描述中提取关键词
     for _, job in jd_df.head(5).iterrows():  # 只处理前5条职位数据用于初始化
@@ -498,40 +531,40 @@ def initialize_entity_registry(user_df, jd_df):
                 for req in common_requirements:
                     if req in job_text:
                         if '经验' in req:
-                            entity_registry.add_entity("experience", req)
+                            entity_registry.add_entity("工作经验", req)
                         elif req in ['本科', '大专']:
-                            entity_registry.add_entity("education", req)
+                            entity_registry.add_entity("教育背景", req)
                         else:
-                            entity_registry.add_entity("skills", req)
+                            entity_registry.add_entity("技能", req)
     
     # 添加一些基本的教育实体
     education_entities = ['本科', '大专', '硕士', '博士', '高中', '中专', 
                          '计算机科学', '软件工程', '工商管理', '市场营销']
     for edu in education_entities:
-        entity_registry.add_entity("education", edu)
+        entity_registry.add_entity("教育背景", edu)
     
     # 添加一些基本的行业实体
     industry_entities = ['互联网', '金融', '教育', '医疗', '房地产', '制造业', 
                         '零售', '物流', '咨询', '广告', '建筑']
     for ind in industry_entities:
-        entity_registry.add_entity("industry", ind)
+        entity_registry.add_entity("行业领域", ind)
     
     # 添加一些基本的职位要求和职责
     requirement_entities = ['团队合作', '沟通能力', '解决问题能力', '学习能力', 
                            '责任心', '执行力', '创新能力', '领导力']
     for req in requirement_entities:
-        entity_registry.add_entity("requirements", req)
+        entity_registry.add_entity("职位要求", req)
     
     responsibility_entities = ['项目管理', '团队管理', '客户沟通', '数据分析', 
                               '产品开发', '市场推广', '销售']
     for resp in responsibility_entities:
-        entity_registry.add_entity("responsibilities", resp)
+        entity_registry.add_entity("工作职责", resp)
 
 # =============================================
 # 第三部分：动态发现新实体类别
 # =============================================
 def discover_new_categories(text, entity_type):
-    """分析文本，发现可能的新实体类别"""
+    """分析文本，发现可能的新实体类别，增加验证逻辑"""
     existing_categories = list(entity_registry.entities.keys())
     existing_categories_json = json.dumps({
         category: entity_registry.category_descriptions.get(category, "")
@@ -548,11 +581,17 @@ def discover_new_categories(text, entity_type):
     
     请找出文本中可能存在但当前类别中未包含的新实体类别。每个新类别应包含名称和简短描述。
     
+    注意:
+    1. 只返回真正有必要的、明确的新类别，避免创建过于细分或重叠的类别
+    2. 确保新类别至少有3个以上的实体实例在文本中存在
+    3. 新类别应该是招聘和人才匹配领域普遍使用的术语
+    4. 类别名称应简短明确，不超过5个汉字
+    
     请以JSON格式返回结果：
     {{
         "new_categories": [
-            {{"name": "类别名称1", "description": "类别描述1"}},
-            {{"name": "类别名称2", "description": "类别描述2"}},
+            {{"name": "类别名称1", "description": "类别描述1", "examples": ["示例实体1", "示例实体2", "示例实体3"]}},
+            {{"name": "类别名称2", "description": "类别描述2", "examples": ["示例实体1", "示例实体2", "示例实体3"]}},
             ...
         ]
     }}
@@ -571,15 +610,28 @@ def discover_new_categories(text, entity_type):
             try:
                 categories_data = json.loads(categories_json)
                 
-                # 添加新类别
+                # 添加新类别，并验证是否有示例实体
+                added_categories = []
                 for new_category in categories_data.get("new_categories", []):
                     category_name = new_category.get("name", "").strip()
                     category_desc = new_category.get("description", "").strip()
+                    examples = new_category.get("examples", [])
                     
-                    if category_name:
-                        entity_registry.add_category(category_name, category_desc)
+                    # 验证类别的有效性：至少有3个示例实体
+                    if category_name and len(examples) >= 3:
+                        added_category = entity_registry.add_category(category_name, category_desc)
+                        if added_category:
+                            added_categories.append(added_category)
+                            
+                            # 添加示例实体到类别中
+                            for example in examples[:5]:  # 限制最多添加5个示例
+                                entity_registry.add_entity(added_category, example)
+                                
+                return added_categories
             except json.JSONDecodeError as e:
                 print(f"解析新类别JSON时出错: {e}")
+                return []
+    return []
 
 # =============================================
 # 第四部分：实体和关系抽取
@@ -587,7 +639,9 @@ def discover_new_categories(text, entity_type):
 def extract_entities_with_llm(text, entity_type):
     """使用大语言模型进行实体抽取，支持动态类别"""
     # 首先尝试发现新的实体类别
-    discover_new_categories(text, entity_type)
+    new_categories = discover_new_categories(text, entity_type)
+    if new_categories:
+        print(f"发现并添加了{len(new_categories)}个新实体类别: {', '.join(new_categories)}")
     
     # 获取当前所有类别及描述
     all_categories = entity_registry.get_all_categories()
@@ -610,6 +664,13 @@ def extract_entities_with_llm(text, entity_type):
         
         请按照上述类别提取实体，并以JSON格式返回结果。对于每个类别，提取相关的实体列表。
         如果某个类别没有找到相关实体，返回空列表。
+        
+        提取原则：
+        1. 每个实体应该是具体、明确的技能、经验或资质，而不是模糊的描述
+        2. 实体表述应该简洁，通常不超过10个字
+        3. 对于不确定的实体，不要强行归类，宁缺毋滥
+        4. 专注于核心类别（技能、工作经验、教育背景、行业领域等）
+        5. 尽量使用规范术语，避免非标准表达
         
         尽量使用已有的规范实体表述，对于新发现的实体，使用最规范、最简洁的表达形式。
         
@@ -634,7 +695,14 @@ def extract_entities_with_llm(text, entity_type):
         请按照上述类别提取实体，并以JSON格式返回结果。对于每个类别，提取相关的实体列表。
         如果某个类别没有找到相关实体，返回空列表。
         
-        特别注意，对于职位描述，通常包含"requirements"(要求)和"responsibilities"(职责)两个核心类别。
+        提取原则：
+        1. 每个实体应该是具体、明确的要求、职责或资质，而不是模糊的描述
+        2. 实体表述应该简洁，通常不超过10个字
+        3. 对于不确定的实体，不要强行归类，宁缺毋滥
+        4. 专注于核心类别（职位要求、工作职责、技能、工作经验等）
+        5. 尽量使用规范术语，避免非标准表达
+        
+        特别注意，对于职位描述，通常包含"职位要求"和"工作职责"两个核心类别。
         
         尽量使用已有的规范实体表述，对于新发现的实体，使用最规范、最简洁的表达形式。
         
@@ -675,9 +743,9 @@ def extract_entities_with_llm(text, entity_type):
             print(f"原始响应: {response_text}")
             
             # 返回默认结构
-            return {"skills": [], "experience": [], "education": [], "industry": []}
+            return {"技能": [], "工作经验": [], "教育背景": [], "行业领域": []}
     else:
-        return {"skills": [], "experience": [], "education": [], "industry": []}
+        return {"技能": [], "工作经验": [], "教育背景": [], "行业领域": []}
 
 def extract_relations_with_llm(entities, entity_type):
     """使用大语言模型构建关系三元组，自动发现关系类型，并确保使用规范化实体"""
@@ -752,8 +820,10 @@ def extract_relations_with_llm(entities, entity_type):
             # 规范化三元组中的实体
             normalized_triples = []
             for subj, rel, obj in triples:
-                # 主体通常是"person"或"job"，不需要规范化
-                # 客体是具体实体，需要规范化
+                # 确保obj是字符串类型
+                if isinstance(obj, list):
+                    # 如果obj是列表，可以将其转换为字符串或只取第一个元素
+                    obj = obj[0] if obj else ""  # 或使用 str(obj) 转为字符串
                 
                 # 尝试确定客体的类别
                 obj_category = None
@@ -1770,13 +1840,18 @@ def main():
     print(f"中意职位MAP: {map_satisfied:.4f}")
     print(f"最终评价值MAP: {map_final:.4f}")
     
+    # 在评估模型后，清理没有实体的类别
+    print("\n开始清理空的实体类别...")
+    removed_count = entity_registry.clean_empty_categories(min_entities=1)
+    print(f"共清理了{removed_count}个空类别")
+    
     # 输出实体清单统计
     print("\n实体清单最终状态:")
     for category, entities in entity_registry.entities.items():
         print(f"- {category}: {len(entities)}个实体")
     
     # 输出新发现的类别
-    initial_categories = ["skills", "experience", "education", "industry", "requirements", "responsibilities"]
+    initial_categories = ["技能", "工作经验", "教育背景", "行业领域", "职位要求", "工作职责"]
     new_categories = [cat for cat in entity_registry.entities.keys() if cat not in initial_categories]
     
     if new_categories:
