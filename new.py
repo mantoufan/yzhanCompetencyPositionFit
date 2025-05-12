@@ -990,7 +990,7 @@ if __name__ == "__main__":
                   '硕士': 5, 'MBA': 5, 'EMBA': 5, '博士': 6}
 
     sub_path = './submit/'
-    train_data_path = './train/'
+    train_data_path = './data/'
     test_data_path = './test/'
     
     # 数据加载和预处理部分
