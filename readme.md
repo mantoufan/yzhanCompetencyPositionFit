@@ -1,6 +1,112 @@
 # 智能招聘推荐系统
 
-基于语义匹配的招聘推荐系统，使用动态实体抽取和大语言模型实现人才与职位的智能匹配。
+基于语义匹配的招聘推荐系统，使用动态实体抽取和大语言模型实现人才与职位的智能匹配o
+
+## 结果
+```txt
+标准化胜任力特征...
+胜任力特征提取完成，耗时: 486.56秒
+生成了19个胜任力特征
+训练满意度(satisfied)预测模型...
+数据形状:
+训练集--(473034, 79)
+测试集--(29674, 79)
+使用 67 个特征 ...
+第 1 折训练开始 ...
+用于训练的用户:3596
+用于验证的用户:899
+[1]     valid_0's auc: 0.660258
+Training until validation scores don't improve for 1 rounds
+Did not meet early stopping. Best iteration is:
+[1]     valid_0's auc: 0.660258
+第 2 折训练开始 ...
+用于训练的用户:3596
+用于验证的用户:899
+[1]     valid_0's auc: 0.660086
+Training until validation scores don't improve for 1 rounds
+Did not meet early stopping. Best iteration is:
+[1]     valid_0's auc: 0.660086
+第 3 折训练开始 ...
+用于训练的用户:3596
+用于验证的用户:899
+[1]     valid_0's auc: 0.657315
+Training until validation scores don't improve for 1 rounds
+Did not meet early stopping. Best iteration is:
+[1]     valid_0's auc: 0.657315
+第 4 折训练开始 ...
+用于训练的用户:3596
+用于验证的用户:899
+[1]     valid_0's auc: 0.665744
+Training until validation scores don't improve for 1 rounds
+Did not meet early stopping. Best iteration is:
+[1]     valid_0's auc: 0.665744
+第 5 折训练开始 ...
+用于训练的用户:3596
+用于验证的用户:899
+[1]     valid_0's auc: 0.666302
+Training until validation scores don't improve for 1 rounds
+Did not meet early stopping. Best iteration is:
+[1]     valid_0's auc: 0.666302
+平均AUC得分: 0.6619410741637479
+训练投递(delivered)预测模型...
+数据形状:
+训练集--(473034, 79)
+测试集--(29674, 79)
+使用 67 个特征 ...
+第 1 折训练开始 ...
+用于训练的用户:3596
+用于验证的用户:899
+[1]     valid_0's auc: 0.560287
+Training until validation scores don't improve for 1 rounds
+Did not meet early stopping. Best iteration is:
+[1]     valid_0's auc: 0.560287
+第 2 折训练开始 ...
+用于训练的用户:3596
+用于验证的用户:899
+[1]     valid_0's auc: 0.552699
+Training until validation scores don't improve for 1 rounds
+Did not meet early stopping. Best iteration is:
+[1]     valid_0's auc: 0.552699
+第 3 折训练开始 ...
+用于训练的用户:3596
+用于验证的用户:899
+[1]     valid_0's auc: 0.553912
+Training until validation scores don't improve for 1 rounds
+Did not meet early stopping. Best iteration is:
+[1]     valid_0's auc: 0.553912
+第 4 折训练开始 ...
+用于训练的用户:3596
+用于验证的用户:899
+[1]     valid_0's auc: 0.549514
+Training until validation scores don't improve for 1 rounds
+Did not meet early stopping. Best iteration is:
+[1]     valid_0's auc: 0.549514
+第 5 折训练开始 ...
+用于训练的用户:3596
+用于验证的用户:899
+[1]     valid_0's auc: 0.565319
+Training until validation scores don't improve for 1 rounds
+Did not meet early stopping. Best iteration is:
+[1]     valid_0's auc: 0.565319
+平均AUC得分: 0.5563461887512755
+
+基础模型结果:
+dev map: 0.2235 sat map: 0.199 final score: 0.2064
+使用胜任力权重系数: 0.15
+
+最终模型权重分配:
+满意度预测基础权重: 0.5950
+投递预测基础权重: 0.2550
+  - knowledge_skills: 0.0300 (提升系数: 1.00)
+  - social_role: 0.0240 (提升系数: 0.80)
+  - self_concept: 0.0270 (提升系数: 0.90)
+  - traits: 0.0450 (提升系数: 1.50)
+  - motive: 0.0390 (提升系数: 1.30)
+计算最终预测结果...
+生成最终提交结果...
+
+所有处理完成! 总耗时: 13.52 分钟
+```
 
 ## 核心假设
 
