@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""极简版胜任力模型特征提取与预测：使用bert-lite模型提升性能与效率"""
+"""极简版胜任力模型特征提取与预测：使用bert-lite模型提升性能与效率 (支持Intel Arc GPU)"""
 
 import pandas as pd
 import numpy as np
@@ -19,18 +19,37 @@ from transformers import AutoTokenizer, AutoModel
 import torch
 from joblib import Parallel, delayed
 
+# 导入Intel PyTorch扩展
+try:
+    import intel_extension_for_pytorch as ipex
+    has_ipex = True
+except ImportError:
+    has_ipex = False
+
 warnings.filterwarnings('ignore')
 
 # 全局配置
 BERT_MODEL_NAME = "boltuix/bert-lite"
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MAX_SEQ_LENGTH = 128
-BATCH_SIZE = 64
+
+# 设备选择：优先使用Intel GPU，然后是CPU
+if has_ipex and hasattr(torch, "xpu") and torch.xpu.is_available():
+    DEVICE = torch.device("xpu")
+    print("使用Intel GPU加速")
+    # 为Intel GPU优化的批处理大小
+    BATCH_SIZE = 2
+    MAX_SEQ_LENGTH = 32
+else:
+    DEVICE = torch.device("cpu")
+    print("使用CPU模式")
+    BATCH_SIZE = 16
+    MAX_SEQ_LENGTH = 128
+
 CACHE_DIR = "./cache"
 EMBEDDING_CACHE_FILE = os.path.join(CACHE_DIR, "bert_embeddings_cache.pkl.gz")
 
 # 确保缓存目录存在
 os.makedirs(CACHE_DIR, exist_ok=True)
+os.environ["PYTORCH_ENABLE_XPU_FALLBACK"] = "0"
 
 # 文本嵌入缓存
 text_embedding_cache = {}
@@ -64,7 +83,18 @@ def save_embedding_cache():
 # 加载BERT模型及Tokenizer
 print(f"加载{BERT_MODEL_NAME}模型...")
 tokenizer = AutoTokenizer.from_pretrained(BERT_MODEL_NAME)
-model = AutoModel.from_pretrained(BERT_MODEL_NAME).to(DEVICE)
+model = AutoModel.from_pretrained(BERT_MODEL_NAME)
+
+# 应用Intel优化（如果可用）
+# if has_ipex and DEVICE.type == "xpu":
+#     try:
+#         model = ipex.optimize(model)
+#         print("应用Intel XPU优化")
+#     except Exception as e:
+#         print(f"Intel XPU优化失败: {e}")
+
+# 将模型移至设备
+model = model.to(DEVICE)
 model.eval()  # 设置为评估模式
 
 # 加载嵌入缓存
@@ -124,7 +154,9 @@ def get_bert_embedding(text, max_length=MAX_SEQ_LENGTH):
         return text_embedding_cache[cache_key]
     
     # 预处理文本
-    inputs = tokenizer(text, max_length=max_length, padding='max_length', truncation=True, return_tensors='pt').to(DEVICE)
+    inputs = tokenizer(text, max_length=max_length, padding='max_length', truncation=True, return_tensors='pt')
+    # 转移到正确的设备
+    inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
     
     # 获取BERT嵌入
     with torch.no_grad():
@@ -170,7 +202,9 @@ def process_batch_embeddings(texts, max_length=MAX_SEQ_LENGTH, batch_size=BATCH_
         if valid_texts:
             # 预处理未缓存的文本
             inputs = tokenizer(valid_texts, max_length=max_length, padding='max_length', 
-                               truncation=True, return_tensors='pt').to(DEVICE)
+                               truncation=True, return_tensors='pt')
+            # 转移到正确的设备
+            inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
             
             # 获取BERT嵌入
             with torch.no_grad():
@@ -402,7 +436,7 @@ def add_competency_features(df):
     unique_job_descs = df['job_description\n'].dropna().unique().tolist()
     
     # 并行处理文本嵌入
-    n_jobs = max(1, min(os.cpu_count() - 1, 16))
+    n_jobs = max(1, min(os.cpu_count() - 1, 8))  # 限制并行度，避免过多资源消耗
     
     print("步骤1/4: 处理经验文本嵌入")
     experience_embs = process_batch_embeddings(unique_experiences)
@@ -555,8 +589,8 @@ def train_predict(train_, test_, pred, label, cate_cols, is_shuffle=True, use_ca
 
         # 训练模型
         clf = lgb.train(
-            params=params, train_set=dtrain, num_boost_round=1,
-            valid_sets=[dvalid], callbacks=[lgb.early_stopping(stopping_rounds=1), lgb.log_evaluation(period=100)]
+            params=params, train_set=dtrain, num_boost_round=1000,
+            valid_sets=[dvalid], callbacks=[lgb.early_stopping(stopping_rounds=50), lgb.log_evaluation(period=100)]
         )
         
         sub_preds[:, n_fold - 1] = clf.predict(test_[pred])
@@ -599,6 +633,21 @@ def calculate_weights(sat_feat_imp, dev_feat_imp, comp_dims, balance_factor=0.2,
            sat_feat_imp[sat_feat_imp['Feature'].isin(comp_features)].copy(), \
            dev_feat_imp[dev_feat_imp['Feature'].isin(comp_features)].copy()
 
+# 清理内存函数
+def cleanup_memory():
+    global model, text_embedding_cache
+    # 释放模型和缓存
+    model = None
+    text_embedding_cache = {}
+    # 清理 GPU 内存
+    if DEVICE.type == "xpu":
+        try:
+            if has_ipex and hasattr(torch, "xpu"):
+                torch.xpu.empty_cache()
+        except AttributeError:
+            print("无法直接清理 XPU 缓存，但资源已释放")
+    print("清理缓存完成，程序结束！")
+
 # 主函数
 if __name__ == "__main__":
     start_time = time.time()
@@ -617,7 +666,7 @@ if __name__ == "__main__":
     print("加载数据中...")
     # 加载用户数据
     train_user = pd.read_csv(f'{train_path}table1_user.csv', sep=',')
-    train_user['desire_jd_city_id'] = train_user['desire_jd_city_id'].apply(lambda x: re.findall('\d+', x))
+    train_user['desire_jd_city_id'] = train_user['desire_jd_city_id'].apply(lambda x: re.findall(r'\d+', x))
     train_user['desire_jd_salary_id'] = train_user['desire_jd_salary_id'].astype(str)
     train_user['min_desire_salary'] = train_user['desire_jd_salary_id'].apply(lambda x: get_salary(x, True))
     train_user['max_desire_salary'] = train_user['desire_jd_salary_id'].apply(lambda x: get_salary(x, False))
@@ -680,7 +729,7 @@ if __name__ == "__main__":
     # 加载测试数据
     print("加载测试数据...")
     test_user = pd.read_csv(f'{test_path}user_ToBePredicted.csv', sep='\t')
-    test_user['desire_jd_city_id'] = test_user['desire_jd_city_id'].apply(lambda x: re.findall('\d+', x))
+    test_user['desire_jd_city_id'] = test_user['desire_jd_city_id'].apply(lambda x: re.findall(r'\d+', x))
     test_user['desire_jd_salary_id'] = test_user['desire_jd_salary_id'].astype(str)
     test_user['min_desire_salary'] = test_user['desire_jd_salary_id'].apply(lambda x: get_salary(x, True))
     test_user['max_desire_salary'] = test_user['desire_jd_salary_id'].apply(lambda x: get_salary(x, False))
@@ -781,7 +830,7 @@ if __name__ == "__main__":
         all_data[j].fillna('nan', inplace=True)
         all_data[f'{j}_map_num'] = le.fit_transform(all_data[j])
     
-    # 添加胜任力维度特征 - 使用 bert-lite 模型
+    # 添加胜任力维度特征 - 使用优化的bert-lite模型
     print('添加胜任力维度特征...')
     all_data = add_competency_features(all_data)
     
@@ -905,6 +954,5 @@ if __name__ == "__main__":
     end_time = time.time()
     print(f"\n所有处理完成! 总耗时: {(end_time - start_time) / 60:.2f} 分钟")
     
-    # 释放BERT模型和缓存的内存
-    torch.cuda.empty_cache() if torch.cuda.is_available() else None
-    print("清理缓存完成，程序结束！")
+    # 释放资源
+    cleanup_memory()

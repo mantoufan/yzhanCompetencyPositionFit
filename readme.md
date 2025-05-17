@@ -1,8 +1,23 @@
 # 智能招聘推荐系统
 
-基于语义匹配的招聘推荐系统，使用动态实体抽取和大语言模型实现人才与职位的智能匹配o
+基于语义匹配的招聘推荐系统，使用动态实体抽取和大语言模型实现人才与职位的智能匹配
+
+## 安装
+
+```shell
+export PYTORCH_ENABLE_XPU_FALLBACK=1
+python -m pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/xpu
+python -m pip install intel-extension-for-pytorch==2.6.10+xpu oneccl_bind_pt==2.6.0+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
+```
+
+## 测试
+
+```shell
+python -c "import torch; import intel_extension_for_pytorch as ipex; print(torch.__version__); print(ipex.__version__); [print(f'[{i}]: {torch.xpu.get_device_properties(i)}') for i in range(torch.xpu.device_count())];"
+```
 
 ## 结果
+
 ```txt
 标准化胜任力特征...
 胜任力特征提取完成，耗时: 486.56秒
